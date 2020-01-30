@@ -4,6 +4,7 @@ stages:
   - build
 
 build:
+  stage: build  
   script:
     - chmod +x ./ci/run_envoy_docker.sh
     - chmod +x ./ci/do_ci.sh
