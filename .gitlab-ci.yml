@@ -1,14 +1,10 @@
+image: alpine:latest
+
 stages:
   - build
 
 build:
-  stage: build
-  image:
-    envoyproxy/envoy-build:latest
   script:
-    - apk update
-    - apk upgrade
-    - apk add bash
     - chmod +x ./ci/run_envoy_docker.sh
     - chmod +x ./ci/do_ci.sh
-    - "bash ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'"
+    - bash ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'
