@@ -10,4 +10,4 @@ build:
     - ls ./ci
     - chmod +x ./ci/run_envoy_docker.sh
     - chmod +x ./ci/do_ci.sh
-    - "bash ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'"
+    - "sh ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'"

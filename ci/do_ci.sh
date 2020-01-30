@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Run a CI build/test target, e.g. docs, asan.
 
