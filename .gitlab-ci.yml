@@ -3,6 +3,8 @@ stages:
 
 build:
   stage: build
+  image:
+    envoyproxy/envoy-build:latest
   script:
     - ls -ltra
     - ls ./ci
