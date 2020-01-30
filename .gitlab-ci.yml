@@ -5,7 +5,7 @@ build:
   stage: build
   script:
     - ls -ltra
-    - ls ./ci/run_envoy_docker.sh
+    - ls ./ci
     - chmod +x ./ci/run_envoy_docker.sh
     - chmod +x ./ci/do_ci.sh
-    - ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'
+    - bash ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'
