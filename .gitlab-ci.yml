@@ -3,11 +3,11 @@ stages:
 
 build:
   stage: build
-  image:
-    envoyproxy/envoy-build:latest
+#  image:
+#    envoyproxy/envoy-build:latest
   script:
     - ls -ltra
     - ls ./ci
     - chmod +x ./ci/run_envoy_docker.sh
     - chmod +x ./ci/do_ci.sh
-    - "sh ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'"
+    - "bash ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'"
