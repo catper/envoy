@@ -2,16 +2,18 @@ image: envoyproxy/envoy-build:latest
 
 stages:
   - build
-  - publish
 
 build:
   stage: build  
   script:
     - bazel build //source/exe:envoy-static
-
-publish:
-  stage: publish
-  script:
+    - which zip
+    - sudo apt-get update
+    - sudo apt-get install docker-ce docker-ce-cli containerd.io
+    - sudo docker run hello-world
     - docker build -f ci/Dockerfile-envoy-image -t envoy .
-
+  artifacts:
+    expire_in: 1 week
+    paths: 
+     - bazel-bin/source/exe/envoy-static
  
