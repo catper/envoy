@@ -1,11 +1,17 @@
-image: alpine:latest
+image: envoyproxy/envoy-build:latest
 
 stages:
   - build
+  - publish
 
 build:
   stage: build  
   script:
-    - chmod +x ./ci/run_envoy_docker.sh
-    - chmod +x ./ci/do_ci.sh
-    - bash ./ci/run_envoy_docker.sh './ci/do_ci.sh bazel.release'
+    - bazel build //source/exe:envoy-static
+
+publish:
+  stage: publish
+  script:
+    - docker build -f ci/Dockerfile-envoy-image -t envoy .
+
+ 
