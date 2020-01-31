@@ -12,8 +12,8 @@ if [[ "$1" == "fix_format" || "$1" == "check_format" || "$1" == "check_repositor
 fi
 
 SRCDIR="${PWD}"
-. "$(dirname "$0")"/setup_cache.sh
-. "$(dirname "$0")"/build_setup.sh $build_setup_args
+. "$(dirname "bazel.release")"/setup_cache.sh
+. "$(dirname "bazel.release")"/build_setup.sh $build_setup_args
 cd "${SRCDIR}"
 
 echo "building using ${NUM_CPUS} CPUs"
