@@ -13,7 +13,7 @@ build:
 #    - apt-get update
 #    - apt-get install -y docker.io
 #    - apt-get install docker-ce docker-ce-cli containerd.io
-    - docker run -ti -v /var/run/docker.sock:/var/run/docker.sock hello-world
+    - docker run -v /var/run/docker.sock:/var/run/docker.sock hello-world
     
   
 #    - docker build -f ci/Dockerfile-envoy-image -t custom-envoy .
