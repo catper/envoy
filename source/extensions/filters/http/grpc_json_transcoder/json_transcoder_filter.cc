@@ -622,8 +622,8 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
   ENVOY_LOG(info, "jsonStatus: {}", json_status);
 
   // attempt to prettify the error body
-  json_status = prettifyError(json_status);
-
+  Json::ObjectSharedPtr json_object = Json::Factory::loadFromString(json_status);
+  ENVOY_LOG(info, "What we get back from loadFromString: {}", json_object);
 
   Buffer::OwnedImpl status_data(json_status);
   encoder_callbacks_->addEncodedData(status_data, false);
@@ -632,11 +632,6 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
 
 bool JsonTranscoderFilter::hasHttpBodyAsOutputType() {
   return method_->output_type()->full_name() == google::api::HttpBody::descriptor()->full_name();
-}
-
-std::string prettifyError(std::string json_in) {
-  //ENVOY_LOG(debug, "attempting to prettify {}", json_in);
-  return json_in;
 }
 
 } // namespace GrpcJsonTranscoder
