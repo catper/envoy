@@ -1,5 +1,5 @@
-image: envoyproxy/envoy-build:latest
-#image: cathleensinch/custom-envoy
+#image: envoyproxy/envoy-build:latest
+image: cathleensinch/custom-envoy
 
 stages:
   - build
@@ -7,18 +7,18 @@ stages:
 build:
   stage: build  
   script:
-    - bazel --output_user_root=/tmp/bazel/output build //source/exe:envoy-static
+#    - bazel --output_user_root=/tmp/bazel/output build //source/exe:envoy-static
 #    - bazel build //source/exe:envoy-static
-    - tar cvfz envoy.tgz ./* /tmp/bazel/output/*
+#    - tar cvfz envoy.tgz ./* /tmp/bazel/output/*
 #    - apt-get update
 #    - apt-get install -y docker.io
 #    - apt-get install docker-ce docker-ce-cli containerd.io
-#    - docker run hello-world
+    - docker run hello-world
 #    - docker build -f ci/Dockerfile-envoy-image -t custom-envoy .
 #    - docker save custom-envoy > envoy-image.tar
   artifacts:
     expire_in: 1 week
-    paths: 
-     - ./envoy.tgz
+#    paths: 
+#     - ./envoy.tgz
 #     - ./envoy-image.tar
  
