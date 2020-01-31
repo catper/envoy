@@ -8,7 +8,7 @@ build:
   script:
     - bazel build //source/exe:envoy-static
     - ls ./bazel-bin/source/exe
-    - tar cvfz stuff.tgz bazel-bin/*
+    - tar cvfz stuff.tgz bazel-bin/source
   artifacts:
     expire_in: 1 week
     paths:

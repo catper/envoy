@@ -24,6 +24,8 @@
 #include "grpc_transcoding/path_matcher_utility.h"
 #include "grpc_transcoding/response_to_json_translator.h"
 
+//#include <nlohmann/json.hpp>
+
 using Envoy::Protobuf::FileDescriptorSet;
 using Envoy::Protobuf::io::ZeroCopyInputStream;
 using Envoy::ProtobufUtil::Status;
@@ -36,6 +38,8 @@ using google::grpc::transcoding::RequestInfo;
 using google::grpc::transcoding::ResponseToJsonTranslator;
 using google::grpc::transcoding::Transcoder;
 using google::grpc::transcoding::TranscoderInputStream;
+
+//using json = nlohmann::json;
 
 namespace Envoy {
 namespace Extensions {
@@ -623,7 +627,9 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
 
   // attempt to prettify the error body
   Json::ObjectSharedPtr json_object = Json::Factory::loadFromString(json_status);
-  ENVOY_LOG(info, "What we get back from loadFromString: {}", json_object);
+  ENVOY_LOG(info, "What we get back from loadFromString: {}", *json_object);
+  //auto parsed = json::parse(json_status);
+  //ENVOY_LOG(info, "Parsed with nlohman: {}", parsed);
 
   Buffer::OwnedImpl status_data(json_status);
   encoder_callbacks_->addEncodedData(status_data, false);
