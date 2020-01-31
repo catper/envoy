@@ -1,5 +1,5 @@
-image: envoyproxy/envoy-build:latest
-#image: cathleensincy/custom-envoy
+#image: envoyproxy/envoy-build:latest
+image: cathleensinch/custom-envoy
 
 stages:
   - build
