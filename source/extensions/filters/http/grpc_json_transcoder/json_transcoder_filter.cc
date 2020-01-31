@@ -215,6 +215,7 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
   std::string path(headers.Path()->value().getStringView());
   std::string args;
 
+  // can we apply fieldmask related things here?
   const size_t pos = path.find('?');
   if (pos != std::string::npos) {
     args = path.substr(pos + 1);
@@ -282,6 +283,7 @@ JsonTranscoderConfig::methodToRequestInfo(const Protobuf::MethodDescriptor* meth
 ProtobufUtil::Status
 JsonTranscoderConfig::translateProtoMessageToJson(const Protobuf::Message& message,
                                                   std::string* json_out) {
+  // could we do some further mapping of the errors + remove default enum values here?
   return ProtobufUtil::BinaryToJsonString(
       type_helper_->Resolver(), Grpc::Common::typeUrl(message.GetDescriptor()->full_name()),
       message.SerializeAsString(), json_out, print_options_);
@@ -342,7 +344,7 @@ Http::FilterHeadersStatus JsonTranscoderFilter::decodeHeaders(Http::HeaderMap& h
 
 Http::FilterDataStatus JsonTranscoderFilter::decodeData(Buffer::Instance& data, bool end_stream) {
   ASSERT(!error_);
-
+// could we do some further mapping of the errors + remove default enum values here?
   if (!transcoder_) {
     return Http::FilterDataStatus::Continue;
   }
@@ -551,7 +553,7 @@ void JsonTranscoderFilter::buildResponseFromHttpBodyOutput(Http::HeaderMap& resp
       Buffer::ZeroCopyInputStreamImpl stream(std::move(frame.data_));
       http_body.ParseFromZeroCopyStream(&stream);
       const auto& body = http_body.data();
-
+      ENVOY_LOG(info, "What's in the body in buildResponseFromHttpBodyOutput {}", body);
       data.add(body);
 
       response_headers.setContentType(http_body.content_type());
@@ -616,6 +618,12 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
   response_headers_->setReferenceContentType(Http::Headers::get().ContentTypeValues.Json);
 
   response_headers_->setContentLength(json_status.length());
+// json_status contains the converted error?
+  ENVOY_LOG(info, "jsonStatus: {}", json_status);
+
+  // attempt to prettify the error body
+  json_status = prettifyError(json_status);
+
 
   Buffer::OwnedImpl status_data(json_status);
   encoder_callbacks_->addEncodedData(status_data, false);
@@ -624,6 +632,11 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
 
 bool JsonTranscoderFilter::hasHttpBodyAsOutputType() {
   return method_->output_type()->full_name() == google::api::HttpBody::descriptor()->full_name();
+}
+
+std::string prettifyError(std::string json_in) {
+  //ENVOY_LOG(debug, "attempting to prettify {}", json_in);
+  return json_in;
 }
 
 } // namespace GrpcJsonTranscoder
