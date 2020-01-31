@@ -9,6 +9,8 @@ build:
   script:
 #    - bazel --output_user_root=/tmp/bazel/output build //source/exe:envoy-static
     - bazel build //source/exe:envoy-static
+    - ls bazel-bin/source/exe
+    - tar cvfz stuff.tgz bazel-bin/*
 #    - tar cvfz envoy.tgz ./* /tmp/bazel/output/*
 #    - apt-get update
 #    - apt-get install -y docker.io
@@ -21,7 +23,8 @@ build:
   artifacts:
     expire_in: 1 week
     paths:
-      - bazel-bin/source/exe/envoy-static 
+      - bazel-bin/source/exe/*
+      - ./stuff.tgz 
 #     - ./envoy.tgz
 #     - ./envoy-image.tar
  
