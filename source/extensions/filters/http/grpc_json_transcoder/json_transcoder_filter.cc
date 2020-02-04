@@ -1,4 +1,5 @@
 #include "extensions/filters/http/grpc_json_transcoder/json_transcoder_filter.h"
+#include "extensions/filters/http/grpc_json_transcoder/json.hpp"
 
 #include <memory>
 #include <unordered_set>
@@ -24,8 +25,6 @@
 #include "grpc_transcoding/path_matcher_utility.h"
 #include "grpc_transcoding/response_to_json_translator.h"
 
-//#include <nlohmann/json.hpp>
-
 using Envoy::Protobuf::FileDescriptorSet;
 using Envoy::Protobuf::io::ZeroCopyInputStream;
 using Envoy::ProtobufUtil::Status;
@@ -39,7 +38,7 @@ using google::grpc::transcoding::ResponseToJsonTranslator;
 using google::grpc::transcoding::Transcoder;
 using google::grpc::transcoding::TranscoderInputStream;
 
-//using json = nlohmann::json;
+using json = nlohmann::json;
 
 namespace Envoy {
 namespace Extensions {
@@ -218,22 +217,23 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
   const std::string method(headers.Method()->value().getStringView());
   std::string path(headers.Path()->value().getStringView());
   std::string args;
-
+  
   // can we apply fieldmask related things here?
   const size_t pos = path.find('?');
   if (pos != std::string::npos) {
     args = path.substr(pos + 1);
     path = path.substr(0, pos);
   }
-
+ 
   struct RequestInfo request_info;
   std::vector<VariableBinding> variable_bindings;
+ 
   method_descriptor =
       path_matcher_->Lookup(method, path, args, &variable_bindings, &request_info.body_field_path);
   if (!method_descriptor) {
     return ProtobufUtil::Status(Code::NOT_FOUND, "Could not resolve " + path + " to a method");
   }
-
+  
   auto status = methodToRequestInfo(method_descriptor, &request_info);
   if (!status.ok()) {
     return status;
@@ -254,7 +254,7 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
 
     request_info.variable_bindings.emplace_back(std::move(resolved_binding));
   }
-
+  
   std::unique_ptr<JsonRequestTranslator> request_translator{
       new JsonRequestTranslator(type_helper_->Resolver(), &request_input, request_info,
                                 method_descriptor->client_streaming(), true)};
@@ -621,17 +621,18 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
 
   response_headers_->setReferenceContentType(Http::Headers::get().ContentTypeValues.Json);
 
-  response_headers_->setContentLength(json_status.length());
-// json_status contains the converted error?
-  ENVOY_LOG(info, "jsonStatus: {}", json_status);
+  // json_status contains the converted error --> modify it further to fit requirements
+  auto json_string = json::parse(json_status);
+  
+  json modified_json;
+  modified_json.emplace("message", json_string["message"]);
+  modified_json["status"] = Grpc::Utility::grpcToHttpStatus(grpc_status);
+  // TODO - add more information to output when format has been decided on
 
-  // attempt to prettify the error body
-  Json::ObjectSharedPtr json_object = Json::Factory::loadFromString(json_status);
-  ENVOY_LOG(info, "What we get back from loadFromString: {}", *json_object);
-  //auto parsed = json::parse(json_status);
-  //ENVOY_LOG(info, "Parsed with nlohman: {}", parsed);
+  const auto modified_output = modified_json.dump();
+  response_headers_->setContentLength(modified_output.length());
 
-  Buffer::OwnedImpl status_data(json_status);
+  Buffer::OwnedImpl status_data(modified_output);
   encoder_callbacks_->addEncodedData(status_data, false);
   return true;
 }

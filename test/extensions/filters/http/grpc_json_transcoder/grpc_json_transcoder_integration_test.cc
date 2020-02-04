@@ -324,8 +324,8 @@ TEST_P(GrpcJsonTranscoderIntegrationTest, UnaryGetError) {
   HttpIntegrationTest::initialize();
   testTranscoding<bookstore::GetShelfRequest, bookstore::Shelf>(
       Http::TestHeaderMapImpl{
-          {":method", "GET"}, {":path", "/shelves/100?"}, {":authority", "host"}},
-      "", {"shelf: 100"}, {}, Status(Code::NOT_FOUND, "Shelf 100 Not Found"),
+          {":method", "GET"}, {":path", "/shelves/100?"}, {":authority", "host"}},          
+          "", {"shelf: 100"}, {}, Status(Code::NOT_FOUND, "Shelf 100 Not Found"),
       Http::TestHeaderMapImpl{
           {":status", "404"}, {"grpc-status", "5"}, {"grpc-message", "Shelf 100 Not Found"}},
       "");
@@ -376,7 +376,7 @@ TEST_P(GrpcJsonTranscoderIntegrationTest, UnaryErrorConvertedToJson) {
                               {"content-type", "application/json"},
                               {"grpc-status", UnexpectedHeaderValue},
                               {"grpc-message", UnexpectedHeaderValue}},
-      R"({"code":5,"message":"Shelf 100 Not Found"})");
+      R"({"message":"Shelf 100 Not Found","status":404})");
 }
 
 // Upstream sends headers (e.g. sends metadata), and then sends trailer with an error.
@@ -401,7 +401,7 @@ TEST_P(GrpcJsonTranscoderIntegrationTest, UnaryErrorInTrailerConvertedToJson) {
                               {"content-type", "application/json"},
                               {"grpc-status", UnexpectedHeaderValue},
                               {"grpc-message", UnexpectedHeaderValue}},
-      R"({"code":5,"message":"Shelf 100 Not Found"})", true, true);
+      R"({"message":"Shelf 100 Not Found","status":404})", true, true);
 }
 
 // Streaming backend returns an error in a trailer-only response.
@@ -426,7 +426,7 @@ TEST_P(GrpcJsonTranscoderIntegrationTest, StreamingErrorConvertedToJson) {
                               {"content-type", "application/json"},
                               {"grpc-status", UnexpectedHeaderValue},
                               {"grpc-message", UnexpectedHeaderValue}},
-      R"({"code":5,"message":"Shelf 37 Not Found"})");
+      R"({"message":"Shelf 37 Not Found","status":404})");      
 }
 
 TEST_P(GrpcJsonTranscoderIntegrationTest, UnaryDelete) {
