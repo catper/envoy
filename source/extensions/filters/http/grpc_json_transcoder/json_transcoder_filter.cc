@@ -138,10 +138,12 @@ JsonTranscoderConfig::JsonTranscoderConfig(
 
   for (const auto& service_name : proto_config.services()) {
     auto service = descriptor_pool_.FindServiceByName(service_name);
+    //descriptor_pool_.FindMethodByName("")
     if (service == nullptr) {
       throw EnvoyException("transcoding_filter: Could not find '" + service_name +
                            "' in the proto descriptor");
     }
+    
     for (int i = 0; i < service->method_count(); ++i) {
       auto method = service->method(i);
 
@@ -218,16 +220,15 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
   std::string path(headers.Path()->value().getStringView());
   std::string args;
   
-  // can we apply fieldmask related things here?
   const size_t pos = path.find('?');
   if (pos != std::string::npos) {
     args = path.substr(pos + 1);
     path = path.substr(0, pos);
   }
- 
+
   struct RequestInfo request_info;
   std::vector<VariableBinding> variable_bindings;
- 
+
   method_descriptor =
       path_matcher_->Lookup(method, path, args, &variable_bindings, &request_info.body_field_path);
   if (!method_descriptor) {
@@ -287,7 +288,6 @@ JsonTranscoderConfig::methodToRequestInfo(const Protobuf::MethodDescriptor* meth
 ProtobufUtil::Status
 JsonTranscoderConfig::translateProtoMessageToJson(const Protobuf::Message& message,
                                                   std::string* json_out) {
-  // could we do some further mapping of the errors + remove default enum values here?
   return ProtobufUtil::BinaryToJsonString(
       type_helper_->Resolver(), Grpc::Common::typeUrl(message.GetDescriptor()->full_name()),
       message.SerializeAsString(), json_out, print_options_);
@@ -299,7 +299,6 @@ Http::FilterHeadersStatus JsonTranscoderFilter::decodeHeaders(Http::HeaderMap& h
                                                               bool end_stream) {
   const auto status =
       config_.createTranscoder(headers, request_in_, response_in_, transcoder_, method_);
-
   if (!status.ok()) {
     // If transcoder couldn't be created, it might be a normal gRPC request, so the filter will
     // just pass-through the request to upstream.
@@ -339,7 +338,7 @@ Http::FilterHeadersStatus JsonTranscoderFilter::decodeHeaders(Http::HeaderMap& h
     Buffer::OwnedImpl data;
     readToBuffer(*transcoder_->RequestOutput(), data);
 
-    if (data.length() > 0) {
+    if (data.length() > 0) {      
       decoder_callbacks_->addDecodedData(data, true);
     }
   }
@@ -348,21 +347,21 @@ Http::FilterHeadersStatus JsonTranscoderFilter::decodeHeaders(Http::HeaderMap& h
 
 Http::FilterDataStatus JsonTranscoderFilter::decodeData(Buffer::Instance& data, bool end_stream) {
   ASSERT(!error_);
-// could we do some further mapping of the errors + remove default enum values here?
+
   if (!transcoder_) {
     return Http::FilterDataStatus::Continue;
   }
-
+  
   request_in_.move(data);
 
   if (end_stream) {
     request_in_.finish();
   }
-
+  
   readToBuffer(*transcoder_->RequestOutput(), data);
 
   const auto& request_status = transcoder_->RequestStatus();
-
+  
   if (!request_status.ok()) {
     ENVOY_LOG(debug, "Transcoding request error {}", request_status.ToString());
     error_ = true;
@@ -390,7 +389,7 @@ Http::FilterTrailersStatus JsonTranscoderFilter::decodeTrailers(Http::HeaderMap&
 
   Buffer::OwnedImpl data;
   readToBuffer(*transcoder_->RequestOutput(), data);
-
+  
   if (data.length()) {
     decoder_callbacks_->addDecodedData(data, true);
   }
@@ -455,7 +454,7 @@ Http::FilterDataStatus JsonTranscoderFilter::encodeData(Buffer::Instance& data, 
   if (end_stream) {
     response_in_.finish();
   }
-
+  
   readToBuffer(*transcoder_->ResponseOutput(), data);
 
   if (!method_->server_streaming() && !end_stream) {
@@ -473,7 +472,7 @@ Http::FilterTrailersStatus JsonTranscoderFilter::encodeTrailers(Http::HeaderMap&
   }
 
   response_in_.finish();
-
+  
   const absl::optional<Grpc::Status::GrpcStatus> grpc_status =
       Grpc::Common::getGrpcStatus(trailers, true);
   if (grpc_status && maybeConvertGrpcStatus(*grpc_status, trailers)) {
@@ -482,11 +481,10 @@ Http::FilterTrailersStatus JsonTranscoderFilter::encodeTrailers(Http::HeaderMap&
 
   Buffer::OwnedImpl data;
   readToBuffer(*transcoder_->ResponseOutput(), data);
-
   if (data.length()) {
     encoder_callbacks_->addEncodedData(data, true);
   }
-
+  
   if (method_->server_streaming()) {
     // For streaming case, the headers are already sent, so just continue here.
     return Http::FilterTrailersStatus::Continue;
@@ -550,14 +548,13 @@ void JsonTranscoderFilter::buildResponseFromHttpBodyOutput(Http::HeaderMap& resp
   if (frames.empty()) {
     return;
   }
-
+  
   google::api::HttpBody http_body;
   for (auto& frame : frames) {
     if (frame.length_ > 0) {
       Buffer::ZeroCopyInputStreamImpl stream(std::move(frame.data_));
       http_body.ParseFromZeroCopyStream(&stream);
       const auto& body = http_body.data();
-      ENVOY_LOG(info, "What's in the body in buildResponseFromHttpBodyOutput {}", body);
       data.add(body);
 
       response_headers.setContentType(http_body.content_type());
@@ -622,12 +619,23 @@ bool JsonTranscoderFilter::maybeConvertGrpcStatus(Grpc::Status::GrpcStatus grpc_
   response_headers_->setReferenceContentType(Http::Headers::get().ContentTypeValues.Json);
 
   // json_status contains the converted error --> modify it further to fit requirements
-  auto json_string = json::parse(json_status);
+  auto parsed = json::parse(json_status);
+  json modified_json;  
   
-  json modified_json;
-  modified_json.emplace("message", json_string["message"]);
-  modified_json["status"] = Grpc::Utility::grpcToHttpStatus(grpc_status);
-  // TODO - add more information to output when format has been decided on
+  modified_json.emplace("status", Grpc::Utility::grpcToHttpStatus(grpc_status));
+  modified_json.emplace("message", parsed["message"]);
+  // TODO - add more/modify details to output when format has been decided on
+  json details = parsed["details"];
+  json mod_details = json::array();
+
+  for (auto& item : details.items()) {
+    json values = item.value();
+    values.erase("@type");
+    mod_details.push_back(values);
+  }
+  if (!mod_details.empty()) {
+    modified_json.emplace("details", mod_details);
+  }
 
   const auto modified_output = modified_json.dump();
   response_headers_->setContentLength(modified_output.length());
