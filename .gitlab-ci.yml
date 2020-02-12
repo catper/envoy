@@ -17,7 +17,10 @@ build:
   stage: build  
   script:
     - bazel build //source/exe:envoy-static
+    - ls bazel-bin/source/exe
     - tar cvfz build.tgz bazel-bin/source/exe
+    - mkdir builds
+    - cp bazel-bin/source/exe/* builds/
   artifacts:
     expire_in: 1 week
     paths:
@@ -28,3 +31,10 @@ build_docker_nexus:
   only:
     refs:
       - master
+
+# trigger downstream build and redeploy 
+#staging:
+#  variables:
+#    ENVIRONMENT: staging
+#  stage: deploy
+#  trigger: envoy-config
