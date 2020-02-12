@@ -1,17 +1,30 @@
 image: envoyproxy/envoy-build:latest
 
+include:
+  - project: 'davmey/pipelines'
+    ref: master
+    file: '/build_docker_nexus.yaml'
+
+variables:
+  DEVOPS_CONTAINER_PATH: /identity-access/envoy
+  DEVOPS_DOCKERFILE_PATH: deployment
+
 stages:
   - build
+  - publish
 
 build:
   stage: build  
   script:
     - bazel build //source/exe:envoy-static
-    - ls ./bazel-bin/source/exe
-    - tar cvfz stuff.tgz bazel-bin/source
+    - tar cvfz build.tgz bazel-bin/source/exe
   artifacts:
     expire_in: 1 week
     paths:
-      - ./bazel-bin/source/exe/*
-      - ./stuff.tgz 
+      - ./build.tgz 
  
+build_docker_nexus:
+  stage: publish
+  only:
+    refs:
+      - master
