@@ -14,7 +14,7 @@ variables:
 
 stages:
   - build
-  - publish
+  - push
 
 build:
   tags: 
