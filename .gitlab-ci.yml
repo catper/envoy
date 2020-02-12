@@ -17,7 +17,8 @@ stages:
   - publish
 
 build:
-  tags: docker+machine
+  tags: 
+    - docker+machine
   stage: build  
   script:
     - bazel build //source/exe:docker-build
