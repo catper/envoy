@@ -25,14 +25,12 @@ build:
   stage: build  
   script:
     - bazel build //source/exe:envoy-static
-    - ls bazel-bin/source/exe
     - cp $CI_PROJECT_DIR/bazel-bin/source/exe/envoy-static $CI_PROJECT_DIR/
-    - tar cvfz build.tgz bazel-bin/source/exe
     - ls -ltra $CI_PROJECT_DIR
   artifacts:
     expire_in: 1 week
     paths:
-      - ./build.tgz 
+      - envoy-static
  
 build_docker_nexus:
   stage: publish
