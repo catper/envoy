@@ -25,7 +25,7 @@ build:
   stage: build  
   script:
     - bazel build //source/exe:envoy-static
-    - cp $CI_PROJECT_DIR/bazel-bin/source/exe/envoy-static $CI_PROJECT_DIR/
+    - cp $CI_PROJECT_DIR/bazel-bin/source/exe/envoy-static $CI_PROJECT_DIR/deployment
     - ls -ltra $CI_PROJECT_DIR
   artifacts:
     expire_in: 1 week
