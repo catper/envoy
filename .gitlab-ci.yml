@@ -5,6 +5,14 @@ include:
     ref: master
     file: '/build_docker_nexus.yaml'
 
+before_script:
+    - echo "build --disk_cache=$CI_PROJECT_DIR/.cache" >> .bazelrc
+
+cache:
+  key: bazel_cache
+  paths:
+    - .cache/
+
 variables:
   DEVOPS_CONTAINER_PATH: /identity-access/envoy
   DEVOPS_DOCKERFILE_PATH: deployment
@@ -16,9 +24,9 @@ stages:
 build:
   stage: build  
   script:
-    - mkdir ../output
-    - bazel --output_user_root=../output build //source/exe:envoy-static
+    - bazel build //source/exe:envoy-static
     - ls bazel-bin/source/exe
+    - cp $CI_PROJECT_DIR/bazel-bin/source/exe/envoy-static $CI_PROJECT_DIR/envoy-static
     - tar cvfz build.tgz bazel-bin/source/exe
   artifacts:
     expire_in: 1 week
