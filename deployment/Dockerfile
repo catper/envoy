@@ -1,2 +1,2 @@
 FROM envoyproxy/envoy:latest
-COPY builds/envoy-static /usr/local/bin/envoy-static
+COPY bazel-bin/source/exe/envoy-static /usr/local/bin/envoy-static
