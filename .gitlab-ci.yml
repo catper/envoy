@@ -30,7 +30,7 @@ build:
   artifacts:
     expire_in: 1 week
     paths:
-      - envoy-static
+      - deployment/envoy-static
  
 build_docker_nexus:
   stage: publish
