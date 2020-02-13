@@ -26,8 +26,9 @@ build:
   script:
     - bazel build //source/exe:envoy-static
     - ls bazel-bin/source/exe
-    - cp $CI_PROJECT_DIR/bazel-bin/source/exe/envoy-static $CI_PROJECT_DIR/envoy-static
+    - cp $CI_PROJECT_DIR/bazel-bin/source/exe/envoy-static $CI_PROJECT_DIR/
     - tar cvfz build.tgz bazel-bin/source/exe
+    - ls $CI_PROJECT_DIR
   artifacts:
     expire_in: 1 week
     paths:
