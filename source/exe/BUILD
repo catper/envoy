@@ -16,29 +16,11 @@ load(
 )
 load("//bazel:repositories.bzl", "PPC_SKIP_TARGETS")
 
-load("@io_bazel_rules_docker//container:container.bzl", "container_push", "container_image")
-
 envoy_package()
 
 alias(
     name = "envoy",
     actual = ":envoy-static",
-)
-
-container_image(
-    name = "docker-build",
-    base = "@envoy_base//image",
-    files = [":envoy_static"],
-    visibility = ["//visibility:public"],
-)
-
-container_push(
-    name = "docker-push",
-    image = ":image",
-    format = "Docker",
-    registry = "nexus.int.clxnetworks.net:8089",
-    repository = "identity-access/envoy",
-    tag = "0.0.1",
 )
 
 envoy_cc_binary(

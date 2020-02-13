@@ -1,12 +1,9 @@
 image: envoyproxy/envoy-build:latest
 
-before_script:
-    - echo "build --disk_cache=$CI_PROJECT_DIR/.cache" >> .bazelrc
-
-cache:
-  key: bazel_cache
-  paths:
-    - .cache/
+include:
+  - project: 'davmey/pipelines'
+    ref: master
+    file: '/build_docker_nexus.yaml'
 
 variables:
   DEVOPS_CONTAINER_PATH: /identity-access/envoy
@@ -17,17 +14,23 @@ stages:
   - publish
 
 build:
-  tags: docker+machine
   stage: build  
   script:
-    - bazel build //source/exe:docker-build
-  
-push_listener:
-  stage: push
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - bazel run //soucre/exe:docker-push
-
+    - bazel build //source/exe:envoy-static
+    - ls bazel-bin/source/exe
+    - tar cvfz build.tgz bazel-bin/source/exe
+    - mkdir builds
+    - cp bazel-bin/source/exe/* builds/
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - ./build.tgz 
+ 
+build_docker_nexus:
+  stage: publish
+  only:
+    refs:
+      - master
 
 # trigger downstream build and redeploy 
 #staging:
