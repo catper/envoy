@@ -11,6 +11,8 @@
 #include "common/grpc/codec.h"
 #include "common/protobuf/protobuf.h"
 
+#include "google/protobuf/util/internal/protostream_objectsource.h"
+
 #include "extensions/filters/http/grpc_json_transcoder/transcoder_input_stream_impl.h"
 
 #include "grpc_transcoding/path_matcher.h"
@@ -38,6 +40,19 @@ struct VariableBinding {
   std::vector<std::string> field_path;
   // The value to be inserted.
   std::string value;
+};
+
+struct RequestData {
+  // the request has a field of type field_mask
+  bool field_mask_field_exists{false};
+  // field_mask was specified in the request
+  bool field_mask_present{false};
+  std::string verb;
+  // name of field mask field, will be an empty string if no field mask field exists
+  std::string field_mask_name;
+  google::grpc::transcoding::RequestInfo request_info;
+  std::shared_ptr<google::grpc::transcoding::TypeHelper> type_helper_;
+  bool client_streaming{false};
 };
 
 /**
@@ -88,6 +103,10 @@ public:
    */
   bool convertGrpcStatus() const;
 
+  std::vector<std::string> getInputFields();
+
+  RequestData getRequestData();
+
 private:
   /**
    * Convert method descriptor to RequestInfo that needed for transcoding library
@@ -103,6 +122,8 @@ private:
   google::grpc::transcoding::PathMatcherPtr<const Protobuf::MethodDescriptor*> path_matcher_;
   std::unique_ptr<google::grpc::transcoding::TypeHelper> type_helper_;
   Protobuf::util::JsonPrintOptions print_options_;
+  std::vector<std::string> input_fields_;
+  RequestData request_data_;
 
   bool match_incoming_request_route_{false};
   bool ignore_unknown_query_parameters_{false};
@@ -138,6 +159,8 @@ public:
 
   // Http::StreamFilterBase
   void onDestroy() override {}
+
+  bool ignore_remaining{false};
 
 private:
   bool readToBuffer(Protobuf::io::ZeroCopyInputStream& stream, Buffer::Instance& data);

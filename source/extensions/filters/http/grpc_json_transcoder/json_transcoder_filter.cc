@@ -78,17 +78,21 @@ public:
         request_stream_(request_translator_->Output().CreateInputStream()),
         response_stream_(response_translator_->CreateInputStream()) {}
 
+       
+
   // Transcoder
   ::google::grpc::transcoding::TranscoderInputStream* RequestOutput() override {
     return request_stream_.get();
   }
-  ProtobufUtil::Status RequestStatus() override { return request_translator_->Output().Status(); }
+  ProtobufUtil::Status RequestStatus() override { 
+    return request_translator_->Output().Status(); 
+  }
 
   ZeroCopyInputStream* ResponseOutput() override { return response_stream_.get(); }
   ProtobufUtil::Status ResponseStatus() override { return response_translator_->Status(); }
 
 private:
-  std::unique_ptr<JsonRequestTranslator> request_translator_;
+  std::shared_ptr<JsonRequestTranslator> request_translator_;
   std::unique_ptr<ResponseToJsonTranslator> response_translator_;
   std::unique_ptr<TranscoderInputStream> request_stream_;
   std::unique_ptr<TranscoderInputStream> response_stream_;
@@ -138,7 +142,6 @@ JsonTranscoderConfig::JsonTranscoderConfig(
 
   for (const auto& service_name : proto_config.services()) {
     auto service = descriptor_pool_.FindServiceByName(service_name);
-    //descriptor_pool_.FindMethodByName("")
     if (service == nullptr) {
       throw EnvoyException("transcoding_filter: Could not find '" + service_name +
                            "' in the proto descriptor");
@@ -170,6 +173,10 @@ JsonTranscoderConfig::JsonTranscoderConfig(
       Protobuf::util::NewTypeResolverForDescriptorPool(Grpc::Common::typeUrlPrefix(),
                                                        &descriptor_pool_));
 
+  request_data_.type_helper_ = std::make_shared<google::grpc::transcoding::TypeHelper>(
+      Protobuf::util::NewTypeResolverForDescriptorPool(Grpc::Common::typeUrlPrefix(),
+                                                       &descriptor_pool_));                                                     
+                                                     
   const auto& print_config = proto_config.print_options();
   print_options_.add_whitespace = print_config.add_whitespace();
   print_options_.always_print_primitive_fields = print_config.always_print_primitive_fields();
@@ -208,6 +215,10 @@ bool JsonTranscoderConfig::matchIncomingRequestInfo() const {
 
 bool JsonTranscoderConfig::convertGrpcStatus() const { return convert_grpc_status_; }
 
+std::vector<std::string> JsonTranscoderConfig::getInputFields() { return input_fields_; }
+
+RequestData JsonTranscoderConfig::getRequestData() { return request_data_; }
+
 ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
     const Http::HeaderMap& headers, ZeroCopyInputStream& request_input,
     google::grpc::transcoding::TranscoderInputStream& response_input,
@@ -231,6 +242,7 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
 
   method_descriptor =
       path_matcher_->Lookup(method, path, args, &variable_bindings, &request_info.body_field_path);
+  
   if (!method_descriptor) {
     return ProtobufUtil::Status(Code::NOT_FOUND, "Could not resolve " + path + " to a method");
   }
@@ -240,6 +252,57 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
     return status;
   }
 
+  auto input_type = method_descriptor->input_type();
+
+  if (std::string("PATCH").compare(method) == 0) {
+    std::string field_mask_name = "";
+    bool has_field_mask = false;
+    for (int i = 0; i < input_type->field_count(); ++i) {
+      const google::protobuf::FieldDescriptor* field_descriptor = input_type->field(i);
+
+      if (field_descriptor->DebugString().find("google.protobuf.FieldMask") != std::string::npos) {
+        has_field_mask = true;
+        field_mask_name = field_descriptor->name();
+        break;
+      }
+    }
+    request_data_.field_mask_field_exists = has_field_mask;
+    if (has_field_mask) {
+      if (args.find(field_mask_name + ".paths=") == std::string::npos) {
+        // field mask not specified in the args
+        request_data_.field_mask_present = false;
+      } else {
+        request_data_.field_mask_present = true;
+      }
+    }
+    request_data_.field_mask_name = field_mask_name;
+  }
+
+  for (int i = 0; i < input_type->field_count(); ++i) {
+    const google::protobuf::FieldDescriptor* field_descriptor = input_type->field(i);
+
+    std::string field_name = field_descriptor->name();
+    if (field_name.compare(request_info.body_field_path) == 0) {
+      const google::protobuf::Descriptor* message_type = descriptor_pool_.FindMessageTypeByName(field_descriptor->message_type()->full_name());
+      if (message_type != nullptr) {
+        input_fields_.clear();
+        for (int i = 0; i < message_type->field_count(); ++i) {
+          input_fields_.push_back(message_type->field(i)->name());
+        }
+      }
+    
+      Buffer::OwnedImpl data;
+      const void* out;
+      int size;
+      while (request_input.Next(&out, &size)) {
+        data.add(out, size);
+        if (size == 0) {
+          break;
+        }
+      }
+    }
+
+  }
   for (const auto& binding : variable_bindings) {
     google::grpc::transcoding::RequestWeaver::BindingInfo resolved_binding;
     status = type_helper_->ResolveFieldPath(*request_info.message_type, binding.field_path,
@@ -256,18 +319,24 @@ ProtobufUtil::Status JsonTranscoderConfig::createTranscoder(
     request_info.variable_bindings.emplace_back(std::move(resolved_binding));
   }
   
+  request_data_.request_info = request_info;
+  request_data_.verb = method;
+  request_data_.client_streaming = method_descriptor->client_streaming();
+  
   std::unique_ptr<JsonRequestTranslator> request_translator{
       new JsonRequestTranslator(type_helper_->Resolver(), &request_input, request_info,
                                 method_descriptor->client_streaming(), true)};
 
   const auto response_type_url =
       Grpc::Common::typeUrl(method_descriptor->output_type()->full_name());
+  //request_data    
   std::unique_ptr<ResponseToJsonTranslator> response_translator{new ResponseToJsonTranslator(
       type_helper_->Resolver(), response_type_url, method_descriptor->server_streaming(),
       &response_input, print_options_)};
 
   transcoder = std::make_unique<TranscoderImpl>(std::move(request_translator),
                                                 std::move(response_translator));
+                                                
   return ProtobufUtil::Status();
 }
 
@@ -299,6 +368,7 @@ Http::FilterHeadersStatus JsonTranscoderFilter::decodeHeaders(Http::HeaderMap& h
                                                               bool end_stream) {
   const auto status =
       config_.createTranscoder(headers, request_in_, response_in_, transcoder_, method_);
+
   if (!status.ok()) {
     // If transcoder couldn't be created, it might be a normal gRPC request, so the filter will
     // just pass-through the request to upstream.
@@ -338,7 +408,7 @@ Http::FilterHeadersStatus JsonTranscoderFilter::decodeHeaders(Http::HeaderMap& h
     Buffer::OwnedImpl data;
     readToBuffer(*transcoder_->RequestOutput(), data);
 
-    if (data.length() > 0) {      
+    if (data.length() > 0) {   
       decoder_callbacks_->addDecodedData(data, true);
     }
   }
@@ -351,15 +421,110 @@ Http::FilterDataStatus JsonTranscoderFilter::decodeData(Buffer::Instance& data, 
   if (!transcoder_) {
     return Http::FilterDataStatus::Continue;
   }
-  
+  // make a copy of the original request data so that we can feed it back in to request_in once we've analysed it
+  Buffer::OwnedImpl orig_data(data);
   request_in_.move(data);
+  auto n_bytes = request_in_.BytesAvailable();
 
   if (end_stream) {
     request_in_.finish();
-  }
+  }  
   
-  readToBuffer(*transcoder_->RequestOutput(), data);
+  auto request_data = config_.getRequestData();
+  
+  if (n_bytes > 0 && request_data.field_mask_field_exists && !request_data.field_mask_present && 
+        (std::string("PATCH").compare(request_data.verb) == 0)) {
+    ignore_remaining = true;
 
+    const void* buff;
+    int size;
+    (&request_in_)->Next(&buff, &size);
+    // repopulate the request stream, we will need it in a bit
+    request_in_.move(orig_data);
+    
+    auto request_body = reinterpret_cast<const char*>(buff);
+    if (request_body) {
+      auto parsed = google::protobuf::StringPiece(reinterpret_cast<const char*>(buff), size);
+      auto as_json = json::parse(parsed);
+      std::vector<std::string> given_fields;
+      auto input_fields_ = config_.getInputFields();
+      for (auto& field : input_fields_) {
+        if (as_json.find(field) != as_json.end()) {
+          given_fields.emplace_back(field);
+        }
+      }
+      if (given_fields.size() != input_fields_.size()) { // ersätt med as_json.keys().size?
+        std::string field_mask_arg = "";
+        for (auto& field : input_fields_) {
+          if (std::find(given_fields.begin(), given_fields.end(), field) != given_fields.end()) {
+            field_mask_arg += field + ",";
+          }
+        }
+        field_mask_arg = field_mask_arg.substr(0, field_mask_arg.length() - 1);
+        google::grpc::transcoding::RequestWeaver::BindingInfo resolved_binding;
+        VariableBinding binding;
+        std::vector<std::string> field_paths = { request_data.field_mask_name, "paths" };
+        binding.value = field_mask_arg; // TODO - url encoding?
+        binding.field_path = field_paths;
+        
+        auto status = request_data.type_helper_->ResolveFieldPath(
+          *(request_data.request_info.message_type), binding.field_path, &resolved_binding.field_path);
+        
+        if (!status.ok()) {
+          ENVOY_LOG(debug, "Path resolution error {}", status.ToString());
+          error_ = true;
+          decoder_callbacks_->sendLocalReply(
+              Http::Code::InternalServerError,
+              absl::string_view(status.error_message().data(), status.error_message().size()),
+              nullptr, absl::nullopt,
+              absl::StrCat(RcDetails::get().GrpcTranscodeFailed, "{",
+                          MessageUtil::CodeEnumToString(status.code()), "}"));
+
+          return Http::FilterDataStatus::StopIterationNoBuffer;
+        }
+
+        resolved_binding.value = binding.value;
+        request_data.request_info.variable_bindings.emplace_back(std::move(resolved_binding));
+        // all updates to request_info complete, create fresh translator
+          
+         std::unique_ptr<JsonRequestTranslator> request_translator{
+           new JsonRequestTranslator(request_data.type_helper_->Resolver(), &request_in_, request_data.request_info,
+                                     request_data.client_streaming, true)};
+        
+        google::grpc::transcoding::MessageStream& output = request_translator->Output();
+        
+        auto output_stream = output.CreateInputStream();
+        auto translated = output_stream.get();
+
+        readToBuffer(*translated, data);
+        
+        auto translation_status = output.Status();
+
+        if (!translation_status.ok()) {
+          ENVOY_LOG(debug, "Transcoding request error {}", translation_status.ToString());
+          error_ = true;
+          decoder_callbacks_->sendLocalReply(
+              Http::Code::BadRequest,
+              absl::string_view(translation_status.error_message().data(),
+                                translation_status.error_message().size()),
+              nullptr, absl::nullopt,
+              absl::StrCat(RcDetails::get().GrpcTranscodeFailed, "{",
+                          MessageUtil::CodeEnumToString(translation_status.code()), "}"));
+
+          return Http::FilterDataStatus::StopIterationNoBuffer;
+        }
+        return Http::FilterDataStatus::Continue;
+      }
+      given_fields.clear();
+    } 
+
+  } else {
+    if (!ignore_remaining) {
+      readToBuffer(*transcoder_->RequestOutput(), data);
+    }
+  }
+
+  ignore_remaining = false;
   const auto& request_status = transcoder_->RequestStatus();
   
   if (!request_status.ok()) {
@@ -454,9 +619,8 @@ Http::FilterDataStatus JsonTranscoderFilter::encodeData(Buffer::Instance& data, 
   if (end_stream) {
     response_in_.finish();
   }
-  
   readToBuffer(*transcoder_->ResponseOutput(), data);
-
+  
   if (!method_->server_streaming() && !end_stream) {
     // Buffer until the response is complete.
     return Http::FilterDataStatus::StopIterationAndBuffer;
@@ -470,7 +634,6 @@ Http::FilterTrailersStatus JsonTranscoderFilter::encodeTrailers(Http::HeaderMap&
   if (error_ || !transcoder_) {
     return Http::FilterTrailersStatus::Continue;
   }
-
   response_in_.finish();
   
   const absl::optional<Grpc::Status::GrpcStatus> grpc_status =
